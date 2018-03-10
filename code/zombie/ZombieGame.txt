@@ -17,10 +17,7 @@
  * 
  * Pairing: IconNames.Ghost,7
  * Paired: IconNames.Happy,
- * Dead: IconNames.Skull,
- * Sick: IconNames.Sad,
- * Incubating: IconNames.Confused,
- * Healthy: IconNames.Happy
+ * Zombie: IconNames.Skull,
  * 
  */
 
@@ -33,19 +30,17 @@ enum GameState {
     Over
 }
 
-
 const GameIcons = {
     Pairing: IconNames.Ghost,
     Paired: IconNames.Happy,
-    Dead: IconNames.Skull,
-    Healthy: IconNames.Happy
+    Zombie: IconNames.Skull
 }
 
 const playerIcons = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 class Player {
     id: number;
     icon: number;
-    team: number;
+    isZombie: boolean;
     show() {
         basic.showString(playerIcons[this.icon]);
     }
@@ -61,6 +56,8 @@ const players: Player[] = [];
 // player state
 let paired = false;
 let playerIcon = -1; // player icon and identity
+let infectedBy = -1; // who infected (playerIcon)
+let hasChangedTeams = false;
 
 // get a player instance (creates one as needed)
 function player(id: number): Player {
@@ -78,7 +75,19 @@ function player(id: number): Player {
 
 
 function gameOver() {
+    serial.writeLine(`game ended with ${countZombies()} zombies out of ${players.length} players`);
     state = GameState.Over;
+}
+
+function countZombies(): number {
+    let count = 0;
+    for (const p of players)
+        if (p.isZombie) count++;
+    return count;
+}
+
+function isZombieMajority(): boolean {
+    return countZombies() > players.length/2;
 }
 
 function gameFace() {
@@ -99,20 +108,22 @@ function gameFace() {
             // show id
             basic.showString(playerIcons[playerIcon]);
             basic.pause(2000);
+
             // TODO: show zombies
-            //
-            // // show how infected
-            // if (infectedBy > -1) {
-            //     basic.showString(" INFECTED BY");
-            //     basic.showString(playerIcons[infectedBy]);
-            //     basic.pause(2000);
-            // } else {
-            //     basic.showString(" PATIENT ZERO");
-            //     basic.pause(2000);
-            // }
+
+            // show how infected
+            if (infectedBy > -1) {
+                basic.showString(" INFECTED BY");
+                basic.showString(playerIcons[infectedBy]);
+                basic.pause(2000);
+            } else {
+                basic.showString(" PATIENT ZERO");
+                basic.pause(2000);
+            }
+
             // show score
-            game.showScore();
-            basic.pause(1000);
+            //TODO
+            //basic.pause(1000);
             break;
     }
 }
@@ -125,36 +136,43 @@ input.onButtonPressed(Button.AB, () => {
         paired = true;
         state = GameState.Pairing;
         radio.setTransmitPower(7); // beef up master signal
-        //TODO???
         basic.showString("0");
         return;
     }
 
     if (!master) return; // master only beyond this
 
-    // launch game
+    // launch game, as we were in pairing mode and AB was pressed again
     if (state == GameState.Pairing) {
-        // pick 1 player and infect him
-        // patientZero = players[Math.random(players.length)];
-        // while (patientZero.health == HealthState.Healthy) {
-        //     radio.sendValue("infect", patientZero.id);
-        //     basic.pause(100);
-        // }
+        if (players.length < 2) {
+            serial.writeLine(`Need at least 2 players to start and only have ${players.length}!`);
+            return;
+        }
+
+        // pick 2 players and make them zombies
+        while (countZombies() < 2) {
+            let ind = Math.random(players.length);
+            if (!players[ind].isZombie) {
+                players[ind].isZombie = true;
+                //broadcast infection
+                radio.sendValue("infect", players[ind].id);
+                basic.pause(100);
+            }
+        }
 
         // all ready
         state = GameState.Running;
         serial.writeLine(`game started ${players.length} players`);
 
-        //TODO???
         // show startup
-        basic.showIcon(GameIcons.Dead);
-    } // end game 
+        basic.showString(countZombies() + "")
+    } // end game as we were running and AB was pressed again
     else if (state == GameState.Running) {
         gameOver();
     }
 })
 
-radio.setGroup(42);
+radio.setGroup(40);
 radio.setTransmitSerialNumber(true)
 radio.onDataPacketReceived(({ time, receivedNumber, receivedString, signal, serial: id }) => {
     if (master) {
@@ -167,32 +185,28 @@ radio.onDataPacketReceived(({ time, receivedNumber, receivedString, signal, seri
                 led.stopAnimation();
                 basic.showNumber(players.length);
             }
+        } else if (receivedString == "zombie") {
+            player(id).isZombie = true;
+            player(id).icon = receivedNumber;
+        } else if (receivedString == "human") {
+            player(id).icon = receivedNumber;
         }
-        //TODO: anything?
-        // else if (receivedString == "health") {
-        //     let p = player(id);
-        //     p.health = receivedNumber;
-        //     // check if all infected
-        //     if (allDead())
-        //         gameOver();
-        // }
+        //TODO: check for end of game?
+        // check if all infected
+        if (isZombieMajority()) {
+            gameOver();
+        }
+
     } else {
         if (receivedString == "state") {
             // update game state
             state = receivedNumber as GameState;
+        } else if (infectedBy < 0 && receivedString == "infect"
+            && receivedNumber == control.deviceSerialNumber()) {
+            // infected by master
+            infectedBy = 0;
+            serial.writeLine(`infected ${control.deviceSerialNumber()}`);
         }
-
-        //TODO:  TEAM JOINING STUFF
-
-        // } else if (infectedBy < 0 &&
-        //     receivedString == "infect"
-        //     && receivedNumber == control.deviceSerialNumber()) {
-        //     // infected by master
-        //     infectedBy = 0; // infected my master
-        //     infectedTime = input.runningTime();
-        //     health = HealthState.Incubating;
-        //     serial.writeLine(`infected ${control.deviceSerialNumber()}`);
-        // }
         // if (receivedString == "h" + control.deviceSerialNumber().toString() &&
         //     health < receivedNumber) {
         //     health = receivedNumber;
@@ -212,9 +226,11 @@ radio.onDataPacketReceived(({ time, receivedNumber, receivedString, signal, seri
                 }
                 break;
             case GameState.Running:
+                //TODO:  TEAM JOINING STUFF
+
                 //TODO: anything?
                 // // broadcast infection status
-                // if (health == HealthState.Healthy && receivedString == "transmit") {
+                // if (health == HealthState.Healthy && receivedString == "zombie") {
                 //     serial.writeLine(`signal: ${signal}`);
                 //     if (signal > RSSI &&
                 //         Math.random(100) > TRANSMISSIONPROB) {
@@ -238,7 +254,7 @@ basic.forever(() => {
             case GameState.Pairing:
                 // tell each player they are registered
                 for (const p of players) {
-                    radio.sendValue("paired", p.id);
+                    radio.  Value("paired", p.id);
                     radio.sendValue("i" + p.id, p.icon);
                 }
                 basic.pause(500);
@@ -271,10 +287,14 @@ basic.forever(() => {
                 //     health = HealthState.Dead;
                 // else if (health != HealthState.Healthy && input.runningTime() - infectedTime > INCUBATION)
                 //     health = HealthState.Sick;
-                // // transmit disease
-                // if (health == HealthState.Incubating || health == HealthState.Sick)
-                //     radio.sendValue("transmit", playerIcon);
-                // radio.sendValue("health", health);
+
+                //broadcast team, as either human or zombie depending on infection status
+                if (infectedBy < 0) {
+                    radio.sendValue("human", playerIcon);
+                } else {
+                    radio.sendValue("zombie", playerIcon);
+                }
+
                 break;
         }
         // show current animation
