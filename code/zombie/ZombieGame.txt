@@ -230,7 +230,7 @@ radio.onDataPacketReceived(({ time, receivedNumber, receivedString, signal, seri
                 break;
             case GameState.Running:
                 //update team state from master confirmation
-                if (teamStatus == TeamState.AwaitingAcknowledgement && receivedString == "joined" + control.deviceSerialNumber().toString()){
+                if (teamStatus == TeamState.AwaitingAcknowledgement && receivedString == "joined" + control.deviceSerialNumber().toString()) {
                     teamStatus = TeamState.Joined;
                     playerIcon = receivedNumber;
                 } else if (receivedString == "team" && signal > RSSI) {  //check for nearby team broadcasts
@@ -296,7 +296,7 @@ basic.forever(() => {
                         break;
                     case TeamState.AwaitingAcknowledgement:
                         //if we are awaiting join confirmation still, rebroadcast team join event
-                        radio.sendValue("joined", receivedNumber);
+                        radio.sendValue("joined", playerIcon);
                         break;
                 }
                 break;
@@ -304,7 +304,6 @@ basic.forever(() => {
     }
     // show current animation
     gameFace();
-}
 })
 
 
