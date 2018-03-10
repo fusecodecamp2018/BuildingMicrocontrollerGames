@@ -63,7 +63,7 @@ const players: Player[] = [];
 let paired = false;
 let playerIcon = -1; // player icon and identity
 let infectedBy = -1; // who infected (playerIcon)
-let hasChangedTeams = false;
+let teamStatus = TeamState.Unjoined;
 
 // get a player instance (creates one as needed)
 function player(id: number): Player {
@@ -95,7 +95,7 @@ function countZombies(): number {
 function isTeamMajority(): boolean {
     //TODO check for any team majority; need to collect players into groups of teams and count the team members
     //need to print out to serial the count of each team and whether they are zombies
-    return countZombies() > players.length/2;
+    return countZombies() > players.length / 2;
 }
 
 function gameFace() {
@@ -121,9 +121,9 @@ function gameFace() {
             if (infectedBy > 0) {
                 basic.showString(" INFECTED BY");
                 basic.showString(playerIcons[infectedBy]);
-            } else if (infectedBy==0) {
+            } else if (infectedBy == 0) {
                 basic.showString(" PATIENT ZERO");
-            } else{
+            } else {
                 basic.showString(" SURVIVOR!");
             }
             basic.pause(2000);
@@ -192,21 +192,17 @@ radio.onDataPacketReceived(({ time, receivedNumber, receivedString, signal, seri
                 led.stopAnimation();
                 basic.showNumber(players.length);
             }
-
-            //TODO: remove this stuff and just process team join info here, 
-            //then need to update zombie state of each member of each team if at least one of the memmbers is a zombie
-        } else if (receivedString == "zombie") {
-            player(id).isZombie = true;
+        } else if (receivedString == "join") {
             player(id).icon = receivedNumber;
-        } else if (receivedString == "human") {
-            player(id).icon = receivedNumber;
+            radio.sendValue("joined" + player(id).id, player(id).icon);
         }
+
+        //TODO: update zombie state of each member of each team if at least one of the memmbers is a zombie
 
         //  finally check if majority infected
         if (isTeamMajority()) {
             gameOver();
         }
-
     } else {
         if (receivedString == "state") {
             // update game state
@@ -233,24 +229,27 @@ radio.onDataPacketReceived(({ time, receivedNumber, receivedString, signal, seri
                 }
                 break;
             case GameState.Running:
-                //TODO:  TEAM JOINING STUFF
-                //if TeamState is unjoined and button B is pressed and signal strength is high, join team (update local state to pending and broadcast)
-                // update TeamState to joined if master confirmation message
-
-                //TODO: anything?
-                // // broadcast infection status
-                // if (health == HealthState.Healthy && receivedString == "zombie") {
-                //     serial.writeLine(`signal: ${signal}`);
-                //     if (signal > RSSI &&
-                //         Math.random(100) > TRANSMISSIONPROB) {
-                //         infectedBy = receivedNumber;
-                //         infectedTime = input.runningTime();
-                //         health = HealthState.Incubating;
-                //     }
-                // } else if (health != HealthState.Dead
-                //     && receivedString == "health" && signal > RSSI) {
-                //     game.addScore(1);
-                // }
+                //update team state from master confirmation
+                if (teamStatus == TeamState.AwaitingAcknowledgement && receivedString == "joined" + control.deviceSerialNumber().toString()){
+                    teamStatus = TeamState.Joined;
+                    playerIcon = receivedNumber;
+                } else if (receivedString == "team" && signal > RSSI) {  //check for nearby team broadcasts
+                    //if TeamState is unjoined and button A is pressed, 
+                    //join team (update local state to pending and broadcast)
+                    if (teamStatus == TeamState.Unjoined) {
+                        if (input.buttonIsPressed(Button.A)) {
+                            //join team
+                            serial.writeLine(`Player ${playerIcon} joining team ${receivedNumber} from player ${control.deviceSerialNumber()}`);
+                            teamStatus = TeamState.AwaitingAcknowledgement;
+                            playerIcon = receivedNumber;
+                            //send to master to confirm join
+                            radio.sendValue("join", receivedNumber);
+                        } else if (!input.buttonIsPressed(Button.B)) {
+                            //show prompt to join team
+                            basic.showString(receivedNumber + "?");
+                        }
+                    }
+                }
                 break;
         }
     }
@@ -263,13 +262,13 @@ basic.forever(() => {
             case GameState.Pairing:
                 // tell each player they are registered
                 for (const p of players) {
-                    radio.  Value("paired", p.id);
+                    radio.sendValue("paired", p.id);
                     radio.sendValue("i" + p.id, p.icon);
                 }
                 basic.pause(500);
                 break;
             case GameState.Running:
-                // TODO: broadcast zombie status of each player?
+                // TODO: should master broadcast zombie status of each player?
                 // for (const p of players) {
                 //     radio.sendValue("h" + p.id, p.health);
                 // }
@@ -286,25 +285,26 @@ basic.forever(() => {
                 if (playerIcon < 0) {
                     radio.sendValue("pair", control.deviceSerialNumber());
                 }
-
-                //TODO: anything here?
-                // else if (infectedBy > -1)
-                //     radio.sendValue("health", health);
                 break;
             case GameState.Running:
-                //TODO: if A is pressed and TeamState is Unjoined, broadcast join beacon instead of doing this?
-                //broadcast team, as either human or zombie depending on infection status
-                if (infectedBy < 0) {
-                    radio.sendValue("human", playerIcon);
-                } else {
-                    radio.sendValue("zombie", playerIcon);
+                switch (teamStatus) {
+                    case TeamState.Unjoined:
+                        //if we are unjoined and A is pressed, broadcast join beacon to others
+                        if (input.buttonIsPressed(Button.A)) {
+                            radio.sendValue("team", playerIcon);
+                        }
+                        break;
+                    case TeamState.AwaitingAcknowledgement:
+                        //if we are awaiting join confirmation still, rebroadcast team join event
+                        radio.sendValue("joined", receivedNumber);
+                        break;
                 }
-
                 break;
         }
-        // show current animation
-        gameFace();
     }
+    // show current animation
+    gameFace();
+}
 })
 
 
