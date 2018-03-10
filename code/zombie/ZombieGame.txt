@@ -12,10 +12,9 @@
  * 
  * The master can also press A+B again to stop the game.
  * 
- * 
  * Icons used in the game:
  * 
- * Pairing: IconNames.Ghost,7
+ * Pairing: IconNames.Ghost,
  * Paired: IconNames.Happy,
  * Zombie: IconNames.Skull,
  * 
@@ -76,6 +75,8 @@ function player(id: number): Player {
     p.icon = (players.length + 1) % playerIcons.length;
 
     players.push(p);
+    serial.writeLine(`player ==> ${p.id}`)
+
     return p;
 }
 
@@ -90,6 +91,10 @@ function countZombies(): number {
     for (const p of players)
         if (p.isZombie) count++;
     return count;
+}
+
+function checkHorde() {
+    // need to build map of team to players and update zombie status of each player in a team that has at least one other zombie
 }
 
 function isTeamMajority(): boolean {
@@ -195,9 +200,10 @@ radio.onDataPacketReceived(({ time, receivedNumber, receivedString, signal, seri
         } else if (receivedString == "join") {
             player(id).icon = receivedNumber;
             radio.sendValue("joined" + player(id).id, player(id).icon);
-        }
 
-        //TODO: update zombie state of each member of each team if at least one of the memmbers is a zombie
+            //TODO: update zombie state of each member of each team if at least one of the memmbers is a zombie
+            checkHorde();
+        }
 
         //  finally check if majority infected
         if (isTeamMajority()) {
@@ -296,14 +302,15 @@ basic.forever(() => {
                         break;
                     case TeamState.AwaitingAcknowledgement:
                         //if we are awaiting join confirmation still, rebroadcast team join event
-                        radio.sendValue("joined", playerIcon);
+                        radio.sendValue("join", playerIcon);
                         break;
                 }
                 break;
         }
+
+        // show current animation
+        gameFace();
     }
-    // show current animation
-    gameFace();
 })
 
 
