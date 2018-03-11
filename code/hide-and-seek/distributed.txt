@@ -4,8 +4,6 @@ const CAPTURE_RSSI = -45;
 interface Client {
     // client serial id
     id: number;
-    // sprite on screen
-    sprite: game.LedSprite;
     // whether they are captured yet
     captured: boolean;
     // last signal strength recieved
@@ -36,7 +34,6 @@ function getClient(id: number): Client {
 
     const client: Client = {
         id: id,
-        sprite: game.createSprite(n % 5, n / 5),
         captured: false,
         lastSignal: -128
     }
@@ -52,7 +49,6 @@ radio.onDataPacketReceived(packet => {
         return;
 
     client.lastSignal = packet.signal;
-    client.sprite.setBrightness(pins.map(packet.signal, -128, -40, 10, 255));
 
     if (selectedClient >= 0) {
         if (client.id == clients[selectedClient].id) {
@@ -74,7 +70,6 @@ radio.onDataPacketReceived(packet => {
 
 input.onButtonPressed(Button.A, () => {
     lastButtonPush = input.runningTime();
-    game.resume();
     //TODO: only allow selection on non captured clients
     if (clients.length > 1) {
         if (selectedClient <= 0) {
@@ -91,7 +86,6 @@ input.onButtonPressed(Button.A, () => {
 
 input.onButtonPressed(Button.B, () => {
     lastButtonPush = input.runningTime();
-    game.resume();
     //TODO: only allow selection on non captured clients
     if (clients.length > 1) {
         if (selectedClient == clients.length - 1 || selectedClient < 0) {
@@ -126,9 +120,9 @@ input.onShake(() => {
 })
 
 basic.forever(() => {
+    led.stopAnimation();
     let shouldPlot = false;
     if (input.runningTime() - lastButtonPush > 1500) {
-        game.pause();
         shouldPlot = true;
     }
 
@@ -136,26 +130,31 @@ basic.forever(() => {
     //if recent button push, show the sprite map, blinking the currently selected client
     for (let index = 0; index < clients.length; index++) {
         const client = clients[index];
-        client.sprite.setBlink(0);
-
-        if (client.captured) {
-            client.sprite.setBrightness(10);
-        } else {
-            client.sprite.setBrightness(pins.map(128 + client.lastSignal, 0, 128 - CAPTURE_RSSI, 10, 255));
+        if (!shouldPlot) {
+            if (client.captured) {
+                led.plotBrightness(index % 5, index / 5, 10);
+            } else {
+                led.plotBrightness(index % 5, index / 5,
+                    pins.map(128 + client.lastSignal, 0, 128 - CAPTURE_RSSI, 25, 255));
+            }
         }
-        //serial.writeLine(`Client ${index} has brightness of` + client.sprite.brightness());
 
         if (selectedClient == index) {
-            client.sprite.setBlink(100);
             if (shouldPlot) {
                 led.plotBarGraph(
                     128 + client.lastSignal,
                     128 - CAPTURE_RSSI
                 )
+            } else {
+                if (input.runningTime() % 4 >= 2) {
+                    led.plotBrightness(index % 5, index / 5, 255);
+                } else {
+                    led.plotBrightness(index % 5, index / 5, 0);
+                }
             }
         }
     }
-    basic.pause(250)
+    basic.pause(10)
 })
 
 // setup the radio and start!
