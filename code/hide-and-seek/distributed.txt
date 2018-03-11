@@ -1,4 +1,4 @@
-const TEST_MODE = true;
+const TEST_MODE = false;
 const CAPTURE_RSSI = -45;
 
 interface Client {
@@ -70,6 +70,8 @@ radio.onDataPacketReceived(packet => {
 
 input.onButtonPressed(Button.A, () => {
     lastButtonPush = input.runningTime();
+    serial.writeLine("A pushed");
+    serial.writeLine(clients.length + " clients connected.");
     //TODO: only allow selection on non captured clients
     if (clients.length > 1) {
         if (selectedClient <= 0) {
@@ -86,6 +88,8 @@ input.onButtonPressed(Button.A, () => {
 
 input.onButtonPressed(Button.B, () => {
     lastButtonPush = input.runningTime();
+    serial.writeLine("B pushed");
+    serial.writeLine(clients.length + " clients connected.");
     //TODO: only allow selection on non captured clients
     if (clients.length > 1) {
         if (selectedClient == clients.length - 1 || selectedClient < 0) {
@@ -120,6 +124,14 @@ input.onShake(() => {
 })
 
 basic.forever(() => {
+    //TODO: need to show something when no clients are connected
+
+    //send out beacon
+    if (input.runningTime() % 10 >= 5) {
+        serial.writeLine("Sending ping.");
+        radio.sendValue("beacon", 0);
+    }
+
     led.stopAnimation();
     let shouldPlot = false;
     if (input.runningTime() - lastButtonPush > 1500) {
@@ -159,3 +171,5 @@ basic.forever(() => {
 
 // setup the radio and start!
 radio.setGroup(4);
+radio.setTransmitPower(7);
+radio.setTransmitSerialNumber(true);
