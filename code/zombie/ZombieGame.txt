@@ -93,14 +93,43 @@ function countZombies(): number {
     return count;
 }
 
-function checkHorde() {
+//collect players into groups of teams and count the team members
+function updateMembers(): number {
+    let maxMembers = 0;
     // need to build map of team to players and update zombie status of each player in a team that has at least one other zombie
+    for (let i = 0; i < players.length; i++) {
+        let members = 0;
+        let hasZombie = false;
+        for (let j = 0; j < players.length; j++) {
+            if (players[j].icon == i) {
+                members++;
+                if (players[j].isZombie)
+                    hasZombie = true;
+            }
+        }
+
+        //the team has more than 1 member and one is a zombie; make sure they all are
+        if (members > 1 && hasZombie) {
+            for (let j = 0; j < players.length; j++) {
+                if (players[j].icon == i)
+                    players[j].isZombie = true;
+            }
+        }
+
+        //update the max
+        if (members > maxMembers) {
+            maxMembers = members;
+        }
+
+        serial.writeLine(`Team ${playerIcons[i]} has ${members} ${hasZombie ? "zombies" : "humans"}.`);
+    }
+
+    return maxMembers;
 }
 
-function isTeamMajority(): boolean {
-    //TODO check for any team majority; need to collect players into groups of teams and count the team members
-    //need to print out to serial the count of each team and whether they are zombies
-    return countZombies() > players.length / 2;
+function isGameOver(): boolean {
+    // check for any team majority or horde majority
+    return Math.max(countZombies(), updateMembers()) > players.length / 2;
 }
 
 function gameFace() {
@@ -122,6 +151,7 @@ function gameFace() {
             basic.showString(playerIcons[playerIcon]);
             basic.pause(2000);
 
+            //TODO: remove/update this and use of infectedBy; its only set on start of game, not by team joining
             // show how infected
             if (infectedBy > 0) {
                 basic.showString(" INFECTED BY");
@@ -201,13 +231,11 @@ radio.onDataPacketReceived(({ time, receivedNumber, receivedString, signal, seri
             player(id).icon = receivedNumber;
             radio.sendValue("joined" + player(id).id, player(id).icon);
 
-            //TODO: update zombie state of each member of each team if at least one of the memmbers is a zombie
-            checkHorde();
-        }
-
-        //  finally check if majority infected
-        if (isTeamMajority()) {
-            gameOver();
+            //update zombie state of each member of each team if at least one of the memmbers is a zombie
+            //  finally check if majority infected
+            if (isGameOver()) {
+                gameOver();
+            }
         }
     } else {
         if (receivedString == "state") {
