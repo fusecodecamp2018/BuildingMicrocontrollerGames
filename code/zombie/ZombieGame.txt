@@ -223,12 +223,13 @@ input.onButtonPressed(Button.AB, () => {
             }
         }
 
-        basic.showIcon(GameIcons.Starting,1000);
+        basic.showIcon(GameIcons.Starting, 500);
         //wait for the zombies to see they were infected
         for (let i = 4; i > 0; i--) {
             basic.showNumber(i);
             basic.pause(1000);
         }
+        basic.showIcon(GameIcons.Starting, 500);
 
         // all ready
         state = GameState.Running;
