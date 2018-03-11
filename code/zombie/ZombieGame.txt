@@ -1,26 +1,41 @@
-/**
+/***********
  * Zombie game
+ ***********
+ * A strategy game of hidden information and social interaction where humans try to defeat zombies
+ * by forming teams of larger size than the zombie horde. Only zombies know they are zombies
+ * and try to convince humans to join their “team”.
+ *
+ * Rules:
+ ***********
+ * Players join a master game via initial pairing and are each assigned a unique team letter A-Z
+ * Once pairing is complete the game begins and 1/3 of the players are assigned to be zombies.
+ * The game begins with a period of players hiding their screens and the zombies are told which players are zombies.
+ * After this point the screen always shows a player’s team letter.
  * 
+ * Once per game a player can join a team by pairing to another player and taking on that player’s identifier.
+ * For example player A can join player B and after that point both players screens will show B.
+ * Similarly player C could join team B by pairing to either of the members.
+ * Note: the joining player will not know until the end of the game if they’ve joined a human team
+ * or been infected and will be unknowingly recruiting for the zombie horde.
+ * 
+ * The game is over when either the zombie horde or a single human team contains the majority of players and wins the game.
+ * Note: the 2 zombies do not need to join a single team, they can independently expand the horde by growing their own teams.
+ * 
+ * Control:
+ ***********
  * Press A+B to enter master mode (1 per game)
  *
  * Wait for players to be paired. The number of paired player will display on screen.
- * An icon will appear on player's screen.
+ * An icon will appear on each player's screen.
  * 
- * Press A+B to start the zombie game. The master will pick two players as zombies.
+ * The master should press A+B to start the game.  The game will end itself when appropriate.
  *
- * TODO: rest of game rules here
- * 
  * The master can also press A+B again to stop the game.
- * 
- * Icons used in the game:
- * 
- * Pairing: IconNames.Ghost,
- * Paired: IconNames.Happy,
- * Zombie: IconNames.Skull,
- * 
  */
 
 const RSSI = -45; // db
+const TEST_MODE = false;
+const NET_DEBUG = false;
 
 enum GameState {
     Stopped,
@@ -61,7 +76,7 @@ const players: Player[] = [];
 // player state
 let paired = false;
 let playerIcon = -1; // player icon and identity
-let infectedBy = -1; // who infected (playerIcon)
+let infected = false;
 let teamStatus = TeamState.Unjoined;
 
 // get a player instance (creates one as needed)
@@ -72,7 +87,7 @@ function player(id: number): Player {
     // add player to game
     let p = new Player();
     p.id = id;
-    p.icon = (players.length + 1) % playerIcons.length;
+    p.icon = (players.length) % playerIcons.length;
 
     players.push(p);
     serial.writeLine(`player ==> ${p.id}`)
@@ -111,8 +126,10 @@ function updateMembers(): number {
         //the team has more than 1 member and one is a zombie; make sure they all are
         if (members > 1 && hasZombie) {
             for (let j = 0; j < players.length; j++) {
-                if (players[j].icon == i)
+                if (players[j].icon == i) {
                     players[j].isZombie = true;
+                    radio.sendValue("infect", players[j].id);
+                }
             }
         }
 
@@ -151,21 +168,14 @@ function gameFace() {
             basic.showString(playerIcons[playerIcon]);
             basic.pause(2000);
 
-            //TODO: remove/update this and use of infectedBy; its only set on start of game, not by team joining
-            // show how infected
-            if (infectedBy > 0) {
-                basic.showString(" INFECTED BY");
-                basic.showString(playerIcons[infectedBy]);
-            } else if (infectedBy == 0) {
-                basic.showString(" PATIENT ZERO");
+            if (infected) {
+                basic.showString(" INFECTED!");
             } else {
                 basic.showString(" SURVIVOR!");
             }
             basic.pause(2000);
 
-            // show score
             //TODO: show who won?
-            //basic.pause(1000);
             break;
     }
 }
@@ -186,13 +196,12 @@ input.onButtonPressed(Button.AB, () => {
 
     // launch game, as we were in pairing mode and AB was pressed again
     if (state == GameState.Pairing) {
-        if (players.length < 2) {
-            serial.writeLine(`Need at least 2 players to start and only have ${players.length}!`);
+        if (players.length < 1) {
             return;
         }
 
-        // pick 2 players and make them zombies
-        while (countZombies() < 2) {
+        let minZombies = Math.max(players.length / 3, 1);
+        while (countZombies() < minZombies) {
             let ind = Math.random(players.length);
             if (!players[ind].isZombie) {
                 players[ind].isZombie = true;
@@ -202,6 +211,7 @@ input.onButtonPressed(Button.AB, () => {
                 basic.pause(100);
             }
         }
+
 
         // all ready
         state = GameState.Running;
@@ -218,7 +228,10 @@ input.onButtonPressed(Button.AB, () => {
 radio.setGroup(40);
 radio.setTransmitSerialNumber(true)
 radio.onDataPacketReceived(({ time, receivedNumber, receivedString, signal, serial: id }) => {
-    //serial.writeLine(`REC: <${receivedString}, ${receivedNumber}> from ${id} at strength ${signal}`);
+    if (NET_DEBUG) {
+        serial.writeLine(`REC: <${receivedString}, ${receivedNumber}> from ${id} at strength ${signal}`);
+    }
+
     if (master) {
         if (receivedString == "pair") {
             // register player
@@ -238,16 +251,18 @@ radio.onDataPacketReceived(({ time, receivedNumber, receivedString, signal, seri
             //  finally check if majority infected
             if (isGameOver()) {
                 gameOver();
+            } else {
+                basic.showNumber(countZombies());
             }
+
         }
     } else {
         if (receivedString == "state") {
             // update game state
             state = receivedNumber as GameState;
-        } else if (infectedBy < 0 && receivedString == "infect"
+        } else if (!infected && receivedString == "infect"
             && receivedNumber == control.deviceSerialNumber()) {
-            // infected by master
-            infectedBy = 0;
+            infected = true;
             serial.writeLine(`Infected ${control.deviceSerialNumber()}`);
         }
 
@@ -305,14 +320,10 @@ basic.forever(() => {
                 basic.pause(500);
                 break;
             case GameState.Running:
-                // TODO: should master broadcast zombie status of each player?
-                //  for (const p of players) {
-                //      radio.sendValue("zombie" + p.id, p.isZombie?1:0);
-                //  }
-
                 //TODO: remove this, this is only for testing; this is done only after team joins happen
-                //updateMembers();
-
+                if (TEST_MODE) {
+                    isGameOver();
+                }
                 break;
             case GameState.Over:
                 //TODO: anything?
