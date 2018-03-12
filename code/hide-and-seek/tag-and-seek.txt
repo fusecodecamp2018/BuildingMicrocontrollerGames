@@ -1,5 +1,5 @@
 const CAPTURE_RSSI = -50;
-const TEST_MODE = true;
+const TEST_MODE = false;
 
 interface Client {
     // client serial id
@@ -165,6 +165,7 @@ basic.forever(() => {
             basic.showNumber(allCapturedTime / 1000);
             basic.showString(" seconds");
         } else {
+            led.setBrightness(255);
             basic.showIcon(IconNames.Happy);
         }
         return;
@@ -208,5 +209,6 @@ basic.forever(() => {
 
 // setup the radio and start!
 radio.setGroup(4);
+//TODO: what do we want for this (0-7)?
 radio.setTransmitPower(7);
 radio.setTransmitSerialNumber(true);
