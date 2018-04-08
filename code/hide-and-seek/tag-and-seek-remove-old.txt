@@ -1,0 +1,240 @@
+const CAPTURE_RSSI = -55;
+const EXPIRE_AFTER = 5000;
+
+interface Client {
+    // client serial id
+    id: number;
+    // whether they are captured yet
+    captured: boolean;
+    // last signal strength recieved
+    lastSignal: number;
+    //last communication time
+    lastCommTime: number;
+}
+
+const clients: Client[] = [];
+let selectedClient = 0;
+let lastButtonPush = input.runningTime();
+let allCapturedTime = -1;
+
+/* lazy allocate sprite */
+function getClient(id: number): Client {
+    // needs an id to track radio client identity
+    if (!id || id.toString().length < 9) {
+        serial.writeLine(`Bad id:${id}`);
+        return undefined;
+    }
+
+    // look for cache clients
+    for (const client of clients)
+        if (client.id == id) {
+            return client;
+        }
+    const n = clients.length;
+    if (n == 24) {// out of pixels 
+        serial.writeLine("Too many clients!");
+        return undefined;
+    }
+
+    const client: Client = {
+        id: id,
+        captured: false,
+        lastSignal: -128,
+        lastCommTime: input.runningTime()
+    }
+    clients.push(client);
+    serial.writeLine(`Created client: ${client.id}`);
+    return client;
+}
+
+function allCaptured(): boolean {
+    let all = true;
+    for (let index = 0; index < clients.length; index++) {
+        const client = clients[index];
+        //get rid of old clients that we haven't heard from recently
+        if (input.runningTime() - client.lastCommTime > EXPIRE_AFTER) {
+            serial.writeLine("Removing client: " + clients[index].id);
+            if (selectedClient == index) {
+                ensureValidSelectedClient();
+            }
+            clients.removeAt(index--);
+        } else if (!client.captured) {
+            all = false;
+        }
+
+        //we might have removed the last one
+        if (clients.length == 0) {
+            return true;
+        }
+    }
+
+    return all;
+}
+
+// store data received by clients
+radio.onDataPacketReceived(packet => {
+    if (packet.receivedNumber != packet.serial) {
+        serial.writeLine("Invalid packet for: " + packet.serial);
+        return;
+    }
+    const client = getClient(packet.serial);
+    if (!client)
+        return;
+
+    client.lastSignal = packet.signal;
+    client.lastCommTime = input.runningTime();
+
+    ensureValidSelectedClient();
+    if (client.id == clients[selectedClient].id) {
+        //this is a packet from the selected client
+        if (client.lastSignal > CAPTURE_RSSI && !client.captured) {
+            serial.writeLine("Able to capture client: " + client.id);
+            if (input.buttonIsPressed(Button.AB)) {
+                client.captured = true;
+                game.addScore(1);
+                led.stopAnimation();
+                basic.showIcon(IconNames.Yes, 1000);
+                next();
+            }
+        }
+    }
+})
+
+input.onButtonPressed(Button.A, () => {
+    lastButtonPush = input.runningTime();
+    prev();
+})
+
+function prev() {
+    let all = allCaptured();
+    if (clients.length == 0 || all) return;
+
+    ensureValidSelectedClient();
+
+    let ind = selectedClient;
+    if (clients.length > 1) {
+        let ind = selectedClient;
+        do {
+            if (ind == 0) {
+                ind = clients.length - 1;
+            } else {
+                ind--;
+            }
+        } while (clients[ind].captured);
+        selectedClient = ind;
+    }
+}
+
+input.onButtonPressed(Button.B, () => {
+    lastButtonPush = input.runningTime();
+    next();
+})
+
+function ensureValidSelectedClient() {
+    if (selectedClient >= clients.length || selectedClient < 0) {
+        selectedClient = 0;
+    }
+}
+
+function next() {
+    let all = allCaptured();
+    if (clients.length == 0 || all) return;
+
+    //reset if invalid
+    ensureValidSelectedClient();
+
+    if (clients.length == 1) {
+        selectedClient = 0;
+    } else {
+        let ind = selectedClient;
+        do {
+            ind = (ind + 1) % clients.length
+        } while (clients[ind].captured);
+        selectedClient = ind;
+    }
+}
+
+
+control.inBackground(() => {
+    while (true) {
+        //send out beacon
+        //serial.writeLine("Sending ping.");
+        radio.sendValue("beacon", control.deviceSerialNumber());
+        basic.pause(10);
+    }
+})
+
+basic.forever(() => {
+    serial.writeLine(`Selected :${selectedClient} from list of max ${clients.length - 1}.`);
+
+    basic.pause(10)
+    led.setBrightness(255);
+    led.stopAnimation();
+
+    let captured = allCaptured();
+    //make sure something is selected
+    if (selectedClient < 0) {
+        next();
+    }
+
+    if (clients.length == 0) {
+        basic.showIcon(IconNames.Ghost);
+        return;
+    } else if (captured) {
+        if (allCapturedTime <= 0) {
+            serial.writeLine("All captured!");
+            allCapturedTime = input.runningTime();
+        }
+        if (input.buttonIsPressed(Button.A)) {
+            game.showScore();
+        } else if (input.buttonIsPressed(Button.B)) {
+            basic.showNumber(allCapturedTime / 1000);
+            basic.showString(" seconds");
+        } else {
+            basic.showIcon(IconNames.Happy);
+        }
+        return;
+    }
+
+    let shouldPlot = false;
+    if (input.runningTime() - lastButtonPush > 1500) {
+        shouldPlot = true;
+    }
+
+    //plot the signal strength of currently selected client
+    //if recent button push, show the sprite map, blinking the currently selected client
+    for (let index = 0; index < clients.length; index++) {
+        const client = clients[index];
+        if (!shouldPlot) {
+            if (client.captured) {
+                led.plotBrightness(index % 5, index / 5, 1);
+            } else {
+                led.plotBrightness(index % 5, index / 5,
+                    pins.map(128 + client.lastSignal, 42, 128 - CAPTURE_RSSI, 15, 255));
+            }
+        }
+
+        if (selectedClient == index) {
+            //plot the selected client if we should
+            if (shouldPlot) {
+                led.plotBarGraph(
+                    128 + client.lastSignal,
+                    128 + CAPTURE_RSSI
+                )
+                //otherwise blink the icon
+            } else {
+                if (input.runningTime() % 4 >= 2) {
+                    led.plotBrightness(index % 5, index / 5, 255);
+                } else {
+                    led.plotBrightness(index % 5, index / 5, 0);
+                }
+            }
+        }
+    }
+})
+
+// setup the radio and start!
+radio.setGroup(4);
+//TODO: what do we want for this (0-7)?
+radio.setTransmitPower(7);
+radio.setTransmitSerialNumber(true);
