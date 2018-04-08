@@ -54,6 +54,10 @@ function allCaptured(): boolean {
 
 // store data received by clients
 radio.onDataPacketReceived(packet => {
+    if (packet.receivedNumber != packet.serial) {
+        serial.writeLine("Invalid packet for: " + packet.serial);
+        return;
+    }
     const client = getClient(packet.serial);
     if (!client)
         return;
@@ -142,7 +146,7 @@ control.inBackground(() => {
     while (true) {
         //send out beacon
         //serial.writeLine("Sending ping.");
-        radio.sendValue("beacon", 0);
+        radio.sendValue("beacon", control.deviceSerialNumber());
         basic.pause(10);
     }
 })
