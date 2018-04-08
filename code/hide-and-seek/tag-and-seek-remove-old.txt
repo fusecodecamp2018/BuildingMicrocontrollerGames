@@ -1,5 +1,5 @@
 const CAPTURE_RSSI = -55;
-const EXPIRE_AFTER = 5000;
+const EXPIRE_AFTER = 20000;
 
 interface Client {
     // client serial id
