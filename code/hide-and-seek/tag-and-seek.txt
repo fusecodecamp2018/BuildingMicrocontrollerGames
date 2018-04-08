@@ -1,4 +1,4 @@
-const CAPTURE_RSSI = -50;
+const CAPTURE_RSSI = -55;
 const TEST_MODE = false;
 
 interface Client {
@@ -18,8 +18,8 @@ let allCapturedTime = -1;
 /* lazy allocate sprite */
 function getClient(id: number): Client {
     // needs an id to track radio client identity
-    if (!id) {
-        serial.writeLine("Bad id.");
+    if (!id || id.toString().length < 9) {
+        serial.writeLine(`Bad id:${id}`);
         return undefined;
     }
 
@@ -80,7 +80,7 @@ input.onButtonPressed(Button.A, () => {
 })
 
 function prev() {
-    if (clients.length > 1) {
+    if (clients.length > 1 && !allCaptured()) {
         let ind = selectedClient;
         do {
             if (ind == 0) {
@@ -99,7 +99,7 @@ input.onButtonPressed(Button.B, () => {
 })
 
 function next() {
-    if (clients.length > 1) {
+    if (clients.length > 1 && !allCaptured()) {
         let ind = selectedClient;
         do {
             ind = (ind + 1) % clients.length
@@ -130,12 +130,12 @@ input.onShake(() => {
 
     }
 
-    //reset the game
-    game.setScore(0);
-    allCapturedTime = -1;
-    for (const client of clients) {
-        client.captured = false;
-    }
+    // //reset the game
+    // game.setScore(0);
+    // allCapturedTime = -1;
+    // for (const client of clients) {
+    //     client.captured = false;
+    // }
 })
 
 control.inBackground(() => {
@@ -190,11 +190,13 @@ basic.forever(() => {
         }
 
         if (selectedClient == index) {
+            //plot the selected client if we should
             if (shouldPlot) {
                 led.plotBarGraph(
                     128 + client.lastSignal,
                     128 + CAPTURE_RSSI
                 )
+                //otherwise blink the icon
             } else {
                 if (input.runningTime() % 4 >= 2) {
                     led.plotBrightness(index % 5, index / 5, 255);
