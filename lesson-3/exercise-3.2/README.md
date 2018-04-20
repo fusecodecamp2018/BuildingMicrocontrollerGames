@@ -26,5 +26,3 @@ Here is what your program should look like in the code editor:
 Here is where you can find the blocks mentioned in steps 1 and 2 in the editor menu. All of the new blocks you need are shown within the orange rectangles:
 ![alt text](https://github.com/fusecodecamp2018/BuildingMicrocontrollerGames/blob/master/lesson-3/exercise-3.2/new-blocks-menu-locations.png "exercise 3.2 blockly menu locations")
 
-
-https://raw.githubusercontent.com/fusecodecamp2018/BuildingMicrocontrollerGames/master/lesson-3/exercise-3.2/display-led-pictures-blockly.png
