@@ -11,3 +11,5 @@ In this exercise we'll display a picture on the LED grid when the program starts
 
 [View exercise 3.2](https://github.com/fusecodecamp2018/BuildingMicrocontrollerGames/tree/master/lesson-3/exercise-3.2)
 
+### References
+[micro:bit Basic blocks feature documentation](https://makecode.microbit.org/reference/basic)
