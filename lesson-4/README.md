@@ -4,12 +4,12 @@ In Lesson 4, we'll learn about the basics of communication using your micro:bit'
 ### Exercise 4.1
 In this exercise we'll build a simple program that uses your micro:bit's Radio.
 
-[View exercise 4.1](https://github.com/fusecodecamp2018/BuildingMicrocontrollerGames/tree/master/lesson-3/exercise-4.1)
+[View exercise 4.1](https://github.com/fusecodecamp2018/BuildingMicrocontrollerGames/tree/master/lesson-4/exercise-4.1)
 
 ### Exercise 4.2
 In this exercise we'll load a simple game onto your micro:bit that uses the Radio.
 
-[View exercise 4.2](https://github.com/fusecodecamp2018/BuildingMicrocontrollerGames/tree/master/lesson-3/exercise-4.2)
+[View exercise 4.2](https://github.com/fusecodecamp2018/BuildingMicrocontrollerGames/tree/master/lesson-4/exercise-4.2)
 
 ### References
 [micro:bit Radio feature documentation](https://makecode.microbit.org/reference/radio)
