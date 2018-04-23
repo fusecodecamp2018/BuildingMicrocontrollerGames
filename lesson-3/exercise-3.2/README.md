@@ -1,5 +1,5 @@
 # Exercise 3.2
-In this exercise we'll display a picture on the LED grid when the program starts, and then display a list of other pictures.
+In this exercise we'll display a picture on the LED grid when the program starts, and then display a rotating set of other pictures.
 
 ### step 1
 From the **Basic** menu, drag the **on start** block into the editor space. The **on start** block will execute commands only once: when the program starts.
