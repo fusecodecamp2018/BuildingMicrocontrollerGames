@@ -1,0 +1,52 @@
+
+basic.onstart() =>{
+let lastRecieved = 0
+let lastSignal = -128
+let now = 0
+
+radio.setTransmitPower(7)
+radio.setGroup(1)
+}
+
+radio.onDataPacketReceived( ({ receivedNumber, signal }) =>  {
+    lastSignal = signal
+    lastRecieved = input.runningTime()
+})
+
+
+
+basic.forever(() => {
+    // transmit
+    radio.sendNumber(0)
+    // if A was pressed, show the time since we last
+    // communicated, or X if never
+    if (input.buttonIsPressed(Button.A)) {
+        led.stopAnimation()
+        if (lastRecieved == 0) {
+            basic.showIcon(IconNames.No, 1);
+        } else {
+            basic.showNumber((input.runningTime() - lastRecieved) / 1000)
+        }
+    } else if (input.buttonIsPressed(Button.B)) {
+        led.stopAnimation()
+        if (lastSignal == -128) {
+            basic.showIcon(IconNames.No, 1);
+        } else {
+            basic.showNumber(lastSignal)
+        }
+    } else {
+        led.stopAnimation()
+        if (input.runningTime() - lastRecieved > 2000) {
+            basic.showIcon(IconNames.No, 1);
+        } else {
+            if (lastSignal > -45) {
+                basic.showString("Found!")
+            } else {
+                led.plotBarGraph(
+                128 + lastSignal,
+                128 - 42
+                )
+            }
+        }
+    }
+})
