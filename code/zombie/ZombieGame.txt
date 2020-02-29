@@ -213,7 +213,7 @@ input.onButtonPressed(Button.AB, () => {
 
         let minZombies = Math.max(players.length / 3, 1);
         while (countZombies() < minZombies) {
-            let ind = Math.random(players.length);
+            let ind = Math.randomRange(0, players.length - 1);
             if (!players[ind].isZombie) {
                 players[ind].isZombie = true;
                 serial.writeLine(`Infecting player ${playerIcons[ind]}.`);
